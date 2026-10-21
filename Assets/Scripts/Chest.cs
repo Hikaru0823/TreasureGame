@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using KanKikuchi.AudioManager;
 using UnityEngine;
+using Cinemachine;
 
 public class Chest : MonoBehaviour
 {
@@ -12,10 +13,13 @@ public class Chest : MonoBehaviour
     [SerializeField] private Collider _mainCollider;
     [SerializeField] private GameObject _mainVisual;
     [SerializeField] private Light _light;
+    [SerializeField] private CinemachineVirtualCamera _itemCamera;
+    [SerializeField] private Transform _itemSpawnPoint;
 
 
     [Header("Settings")]
-    [SerializeField] private float _lightmaxRange = 3f;
+    [SerializeField] private float _lightmaxRangeAlongtheWay = 1f;
+    [SerializeField] private float _lightmaxRangeAtEnd = 3f;
     [SerializeField] private float _openTime = 1.0f;
     [SerializeField] private float _openAngleAlongtheWay = -10f;
     [SerializeField] private float _openAngleAtEnd = -100f;
@@ -26,6 +30,8 @@ public class Chest : MonoBehaviour
 
     private Quaternion _mainVisualBaseRotation;
     private MaterialPropertyBlock _propertyBlock;
+    private float _initialLightRange;
+    private float _openingElapsed;
 
     private bool _isSelected = false;
     private bool _isOpened = false;
@@ -44,6 +50,7 @@ public class Chest : MonoBehaviour
     void Start()
     {
         _mainVisualBaseRotation = _mainVisual.transform.localRotation;
+        _initialLightRange = _light.range;
         _openTime = SettingData.Instance?.GameData.GameTime ?? _openTime;
         Stage.Instance.SetIgnoreFloorCollision(_mainCollider);
         SEManager.Instance.Play(SEPath.FALL);
@@ -53,9 +60,13 @@ public class Chest : MonoBehaviour
     {
         if(_isSelected)
         {
+            _openingElapsed += Time.deltaTime;
+            float openingProgress = _openTime > 0f ? Mathf.Clamp01(_openingElapsed / _openTime) : 1f;
+            _light.range = Mathf.Lerp(_initialLightRange, _lightmaxRangeAlongtheWay, openingProgress);
             float angleX = Mathf.DeltaAngle(0f, _chestTop.transform.localEulerAngles.x);
-            if(angleX <= _openAngleAlongtheWay)
+            if(openingProgress >= 1f || angleX <= _openAngleAlongtheWay)
             {
+                _light.range = _lightmaxRangeAlongtheWay;
                 _chestTop.transform.localEulerAngles = new Vector3(_openAngleAlongtheWay, 0, 0);
                 _mainVisual.transform.localRotation = _mainVisualBaseRotation;
                 OnChestOpen();
@@ -64,8 +75,6 @@ public class Chest : MonoBehaviour
             }
             float angle = (_openAngleAlongtheWay / _openTime) * Time.deltaTime;
             _chestTop.transform.Rotate(Vector3.right, angle);
-            float lightRange = Mathf.Lerp(_light.range, _lightmaxRange, Time.deltaTime);
-            _light.range = lightRange;
             float shakeAngle = Mathf.Sin(Time.time * _shakeFrequency * Mathf.PI * 2f) * _shakeAngle;
             _mainVisual.transform.localRotation = _mainVisualBaseRotation * Quaternion.Euler(0f, 0f, shakeAngle);
         }
@@ -97,13 +106,17 @@ public class Chest : MonoBehaviour
     {
         Vector3 startAngles = _chestTop.transform.localEulerAngles;
         float startAngleX = Mathf.DeltaAngle(0f, startAngles.x);
+        float startLightRange = _light.range;
         float elapsed = 0f;
+        SpawnItem();
 
         while (elapsed < _openAnimationDuration)
         {
             elapsed += Time.deltaTime;
-            // Ease Out Back: slightly overshoot the target, then settle back.
-            float t = Mathf.Clamp01(elapsed / _openAnimationDuration) - 1f;
+            float timeProgress = Mathf.Clamp01(elapsed / _openAnimationDuration);
+            _light.range = Mathf.Lerp(startLightRange, _lightmaxRangeAtEnd, timeProgress);
+
+            float t = timeProgress - 1f;
             float progress = 1f + (_openOvershoot + 1f) * t * t * t + _openOvershoot * t * t;
             float angleX = Mathf.LerpUnclamped(startAngleX, _openAngleAtEnd, progress);
             _chestTop.transform.localEulerAngles = new Vector3(angleX, startAngles.y, startAngles.z);
@@ -111,6 +124,18 @@ public class Chest : MonoBehaviour
         }
 
         _chestTop.transform.localEulerAngles = new Vector3(_openAngleAtEnd, startAngles.y, startAngles.z);
+        _light.range = _lightmaxRangeAtEnd;
+        _itemCamera.Priority = 20;
+    }
+
+    private void SpawnItem()
+    {
+        GameObject itemPrefab = ItemHolder.Instance.GetRandomItem();
+        if (itemPrefab != null)
+        {
+            GameObject itemInstance = Instantiate(itemPrefab, _itemSpawnPoint.position, Quaternion.identity, _itemSpawnPoint);
+            
+        }
     }
 
     private void SetOutlineColor(Color color)
