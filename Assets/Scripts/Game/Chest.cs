@@ -3,18 +3,22 @@ using System.Collections.Generic;
 using KanKikuchi.AudioManager;
 using UnityEngine;
 using Cinemachine;
+using System;
 
 public class Chest : MonoBehaviour
 {
     [Header("Resources")]
     [SerializeField] private GameObject _chestTop;
     [SerializeField] private Animator _animator;
+    [SerializeField] private Rigidbody _rigidBody;
     [SerializeField] private Renderer[] _renderers;
-    [SerializeField] private Collider _mainCollider;
+    [SerializeField] private Collider _visualCollider; //マウスで検知できる
+    [SerializeField] private Collider _realCollider; //床と接触できる
     [SerializeField] private GameObject _mainVisual;
     [SerializeField] private Light _light;
     [SerializeField] private CinemachineVirtualCamera _itemCamera;
     [SerializeField] private Transform _itemSpawnPoint;
+    [SerializeField] private SpriteRenderer _itemBG;
 
 
     [Header("Settings")]
@@ -27,8 +31,12 @@ public class Chest : MonoBehaviour
     [SerializeField, Min(0f)] private float _openOvershoot = 1.2f;
     [SerializeField] private float _shakeAngle = 2f;
     [SerializeField] private float _shakeFrequency = 15f;
+    [SerializeField] private float _itemApperTime = 5f;
+
+    public Action OnAttentionedItem;
 
     private Quaternion _mainVisualBaseRotation;
+    private GameObject _item;
     private MaterialPropertyBlock _propertyBlock;
     private float _initialLightRange;
     private float _openingElapsed;
@@ -41,23 +49,25 @@ public class Chest : MonoBehaviour
     void Awake()
     {
         _propertyBlock = new MaterialPropertyBlock();
-        if (_renderers == null || _renderers.Length == 0)
-        {
-            _renderers = _mainVisual.GetComponentsInChildren<Renderer>(true);
-        }
     }
 
     void Start()
     {
+        _itemBG.enabled = false;
         _mainVisualBaseRotation = _mainVisual.transform.localRotation;
         _initialLightRange = _light.range;
-        _openTime = SettingData.Instance?.GameData.GameTime ?? _openTime;
-        Stage.Instance.SetIgnoreFloorCollision(_mainCollider);
+        _openTime = SettingData.Instance?.ChestData.GazeTime ?? _openTime;
+        Stage.Instance.SetIgnoreFloorCollision(_visualCollider);
         SEManager.Instance.Play(SEPath.FALL);
     }
 
     void Update()
     {
+        if(_itemBG.enabled)
+        {
+            _itemBG.transform.Rotate(Vector3.forward, Time.deltaTime*40);
+        }
+
         if(_isSelected)
         {
             _openingElapsed += Time.deltaTime;
@@ -87,6 +97,8 @@ public class Chest : MonoBehaviour
             if(_hasFallen)
                 return;
             _hasFallen = true;
+            _rigidBody.isKinematic = true;
+            _rigidBody.useGravity = false;
             _animator.Play("Fell", 0, 0f);
             SEManager.Instance.Play(SEPath.TREASURE_DROP);
         }
@@ -97,7 +109,10 @@ public class Chest : MonoBehaviour
     private void OnChestOpen()
     {
         if(_isOpened) return;
+        _visualCollider.isTrigger = true;
+        _realCollider.isTrigger = true;
         OnDeselected();
+        GameManager.Instance.OnGetItem();
         SEManager.Instance.Play(SEPath.CHEST_OPEN);
         StartCoroutine(AnimateChestOpen());
     }
@@ -126,6 +141,20 @@ public class Chest : MonoBehaviour
         _chestTop.transform.localEulerAngles = new Vector3(_openAngleAtEnd, startAngles.y, startAngles.z);
         _light.range = _lightmaxRangeAtEnd;
         _itemCamera.Priority = 20;
+
+        yield return new WaitForSeconds(0.5f);
+        
+        OnAttentionItem();
+
+        yield return new WaitForSeconds(_itemApperTime);
+
+        AfterAttentionItem();
+
+        yield return new WaitForSeconds(0.5f);
+
+        _item.SetActive(false);
+        GameManager.Instance.PlayEffect(_itemSpawnPoint.position);
+        Disapper();
     }
 
     private void SpawnItem()
@@ -133,9 +162,31 @@ public class Chest : MonoBehaviour
         GameObject itemPrefab = ItemHolder.Instance.GetRandomItem();
         if (itemPrefab != null)
         {
-            GameObject itemInstance = Instantiate(itemPrefab, _itemSpawnPoint.position, Quaternion.identity, _itemSpawnPoint);
-            
+            _item= Instantiate(itemPrefab, _itemSpawnPoint.position, Quaternion.identity, _itemSpawnPoint);
         }
+    }
+
+    private void OnAttentionItem()
+    {
+        _itemBG.enabled = true;
+        SEManager.Instance.Play(SEPath.ITEM_APPERED);
+    }
+
+    private void AfterAttentionItem()
+    {
+        _itemCamera.Priority = 0;
+        _itemBG.enabled = false;
+        OnAttentionedItem?.Invoke();
+    }
+
+    private void Disapper()
+    {
+        _animator.Play("Disapper");
+    }
+
+    public void Destroy()
+    {
+        Destroy(this.gameObject);
     }
 
     private void SetOutlineColor(Color color)

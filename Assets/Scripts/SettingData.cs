@@ -72,7 +72,7 @@ public class ChestData
     public float CollisionScale;
 
     public float VisualScale;
-    public float LifeTime;
+    public float GazeTime;
     public int TargetShapeIdx;
     public int VFXIdx;
 }

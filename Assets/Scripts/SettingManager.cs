@@ -58,7 +58,7 @@ public class SettingManager : SceneSingleton<SettingManager>
 
     public void SetCollisionScale(string value) => SettingData.Instance.ChestData.CollisionScale = float.Parse(value.Replace("倍", ""));
     public void SetVisualScale(string value) => SettingData.Instance.ChestData.VisualScale = float.Parse(value.Replace("倍", ""));
-    public void SetLifeTime(string value) => SettingData.Instance.ChestData.LifeTime = float.Parse(value.Replace("秒", ""));
+    public void SetLifeTime(string value) => SettingData.Instance.ChestData.GazeTime = float.Parse(value.Replace("秒", ""));
     public void SetTargetShape(int idx) => SettingData.Instance.ChestData.TargetShapeIdx = idx;
     public void SetVFXType(int idx) => SettingData.Instance.ChestData.VFXIdx = idx;
     #endregion
@@ -82,7 +82,7 @@ public class ChestDataSelecter
 {
     public SelecterUI CollisionScale;
     public SelecterUI VisualScale;
-    public SelecterUI LifeTime;
+    public SelecterUI GazeTime;
     public SelecterUI TargetShape;
     public SelecterUI VFXIdx;
 }
